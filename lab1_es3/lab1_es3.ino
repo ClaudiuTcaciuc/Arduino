@@ -1,4 +1,3 @@
-#include <TimerOne.h>
 const int GLED_PIN = 10;
 const int PIR_PIN = 7;
 
@@ -30,7 +29,7 @@ void checkPresence() {
 }
 
 void loop() {
-  delay(1e4);
+  delay(3e4);
   Serial.print("Total people count: ");
   Serial.println(tot_count);
 }

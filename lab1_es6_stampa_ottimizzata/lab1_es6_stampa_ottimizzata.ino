@@ -18,14 +18,14 @@ void setup() {
   lcd.begin(16, 2);
   lcd.setBacklight(255);
   lcd.home();
+  lcd.clear();
+  lcd.print("Temperature:");
 }
 
 void convertTension (int sensorVal) {
   float R = ((Vcc / sensorVal) - 1.0) * R0;
   float T = 1 / (log(R / R0) / B + 1 / T0) - 273.15;
-  lcd.clear();
-  lcd.setCursor(0,0);
-  lcd.print("Temperature:");
+  lcd.setCursor(12,0);
   lcd.print(T);
   delay(1e3);
 }

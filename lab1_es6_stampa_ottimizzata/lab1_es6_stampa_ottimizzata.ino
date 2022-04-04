@@ -25,7 +25,7 @@ void setup() {
 void convertTension (int sensorVal) {
   float R = ((Vcc / sensorVal) - 1.0) * R0;
   float T = 1 / (log(R / R0) / B + 1 / T0) - 273.15;
-  lcd.setCursor(12,0);
+  lcd.setCursor(12, 0);
   lcd.print(T);
   delay(1e3);
 }

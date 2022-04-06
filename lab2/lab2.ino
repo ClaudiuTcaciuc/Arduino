@@ -46,22 +46,9 @@ int calcLedIntensity(float temp) {
   }
 }
 
-<<<<<<< HEAD
 void changeFanSpeed(int newSpeed) {
   if (newSpeed <= 255 && newSpeed >= 0) {
     analogWrite(FAN_PIN, newSpeed);
-=======
-void change(int Temp) {
-  if (Temp >= 25) {
-    analogWrite(RLED_PIN, LOW);
-    int newSpeed = SetSpeed(Temp);
-    changeSpeed(newSpeed);
-  }
-  else {
-    changeSpeed(0);
-    int newLed = SetLed(Temp);
-    analogWrite(RLED_PIN, newLed);
->>>>>>> f959aa6898f2e451fc7ef9e4e939eb47c80c428f
   }
 }
 

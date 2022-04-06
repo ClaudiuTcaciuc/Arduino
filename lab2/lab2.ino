@@ -54,7 +54,7 @@ int SetLed(float Temp) {
 
 void change(int Temp) {
   if (Temp >= 25) {
-    analogWrite(RLED_PIN, LOW)
+    analogWrite(RLED_PIN, LOW);
     int newSpeed = SetSpeed(Temp);
     changeSpeed(newSpeed);
   }

@@ -39,8 +39,8 @@ int calcSpeed(float temp) {
 
 int calcLedIntensity(float temp) {
   if (temp >= 20.0) {
-    float dt = (temp - 20.0) * 51.0;
-    return static_cast<int>(dt);
+    float dt = (25.0 - temp) * 51.0;
+    return (int)(dt);
   } else {
     return 255;
   }
@@ -56,14 +56,13 @@ void checkTempAndChangeSpeed(float temp) {
   else {
     analogWrite(FAN_PIN, 0);
     int newLedIntensity = calcLedIntensity(temp);
-    if (newLedIntensity <= 255 && newLedIntensity >= 0) {
+    if (newLedIntensity <= 255 && newLedIntensity >= 0)
       analogWrite(RLED_PIN, newLedIntensity);
-    }
   }
 }
-  void loop() {
-    float sensorVal = analogRead(TEMP_PIN);
-    float temp = convertTension(sensorVal);
-    checkTempAndChangeSpeed(temp);
-    delay(1e4);
-  }
+void loop() {
+  float sensorVal = analogRead(TEMP_PIN);
+  float temp = convertTension(sensorVal);
+  checkTempAndChangeSpeed(temp);
+  delay(1e4);
+}

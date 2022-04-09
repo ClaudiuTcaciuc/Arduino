@@ -44,8 +44,8 @@ int calcSpeed(float temp) {
 
 int calcLedIntensity(float temp) {
   if (temp >= 20.0) {
-    float dt = (temp - 20.0) * 51.0;
-    return static_cast<int>(dt);
+    float dt = (25.0 - temp) * 51.0;
+    return (int)(dt);
   } else {
     return 255;
   }

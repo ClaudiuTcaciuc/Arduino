@@ -15,6 +15,13 @@ const int TEMP_PIN = A1;
 const int PIR_PIN = 7;
 unsigned long elapsed_time = 0;
 const long timeout_pir = 30l * 60l * 1000l;
+struct TempPair {
+  float low;
+  float high;
+};
+TempPair ct{.low = 25.0, .high = 30.0};
+TempPair ht{.low = 17.0, .high = 24.0};
+
 void setup() {
   pinMode(PIR_PIN, INPUT);
   pinMode(MIC_PIN, INPUT);
@@ -27,7 +34,8 @@ void setup() {
   Serial.begin(9600);
   while (!Serial);
   Serial.println("Lab 2 Starting");
-
+  Serial.println("Write 'HTH/ HTL/ CTH/ CTL'");
+  Serial.println("followed by a space and a number to change set point");
   lcd.begin(16, 2);
   lcd.setBacklight(255);
   lcd.home();
@@ -45,41 +53,39 @@ float convertTension(float sensorVal) {
   return T;
 }
 
-int calcSpeed(float temp, float ct_high, float ct_low) {
-  if (temp <= ct_high) {
-    float dt = (temp - ct_low) * (255 / (ct_high - ct_low));
+int calcSpeed(float temp) {
+  if (temp <= ct.high) {
+    float dt = (temp - ct.low) * (255 / (ct.high - ct.low));
     return (int)dt;
   } else {
     return 255;
   }
 }
 
-int calcLedIntensity(float temp, float ht_high, float ht_low) {
-  if (temp >= ht_low) {
-    float dt = (ht_high - temp) * (255 / (ht_high - ht_low));
+int calcLedIntensity(float temp) {
+  if (temp >= ht.low) {
+    float dt = (ht.high - temp) * (255 / (ht.high - ht.low));
     return (int)(dt);
   } else {
     return 255;
   }
 }
 
-void checkTempAndChangeSpeed(float temp, float ht_low,
-                             float ht_high, float ct_low,
-                             float ct_high, int pres) {
+void checkTempAndChangeSpeed(float temp, int pres) {
   int newSpeed = 0;
   int newLedIntensity = 0;
-  if (temp >= ct_low) {
+  if (temp >= ct.low) {
     analogWrite(RLED_PIN, LOW);
-    newSpeed = calcSpeed(temp, ct_high, ct_low);
+    newSpeed = calcSpeed(temp);
     if (newSpeed <= 255 && newSpeed >= 0) {
       analogWrite(FAN_PIN, newSpeed);
       Serial.print("New fan speed: ");
       Serial.println(newSpeed);
     }
   }
-  else if (temp < ht_high) {
+  else if (temp < ht.high) {
     analogWrite(FAN_PIN, 0);
-    newLedIntensity = calcLedIntensity(temp, ht_high, ht_low);
+    newLedIntensity = calcLedIntensity(temp);
     if (newLedIntensity <= 255 && newLedIntensity >= 0) {
       analogWrite(RLED_PIN, newLedIntensity);
       Serial.print("New led intensity: ");
@@ -90,6 +96,8 @@ void checkTempAndChangeSpeed(float temp, float ht_low,
     analogWrite(RLED_PIN, LOW);
     analogWrite(FAN_PIN, 0);
   }
+  char buf[10] {};
+  Serial.println(buf);
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("T:");
@@ -107,16 +115,18 @@ void checkTempAndChangeSpeed(float temp, float ht_low,
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("AC m:");
-  lcd.print(ct_low);
-  lcd.setCursor(9, 0);
+  dtostrf(ct.low, 2, 1, buf);
+  lcd.print(buf);
   lcd.print(" M:");
-  lcd.print(ct_high);
+  dtostrf(ct.high, 2, 1, buf);
+  lcd.print(buf);
   lcd.setCursor(0, 1);
   lcd.print("HT m:");
-  lcd.print(ht_low);
-  lcd.setCursor(9, 1);
+  dtostrf(ht.low, 2, 1, buf);
+  lcd.print(buf);
   lcd.print(" M:");
-  lcd.print(ht_high);
+  dtostrf(ht.high, 2, 1, buf);
+  lcd.print(buf);
   delay(5e3);
 }
 
@@ -150,19 +160,76 @@ bool checkPresenceRoom() {
   return false;
 }
 
-void checkAndChangeSetPoint(float temp) {
-  float ht_high = 20.0, ht_low = 10.0, ct_high = 40.0, ct_low = 30.0;
+float readSetPoint() {
+  while (Serial.available() == 0) {};
+  return Serial.parseFloat();
+}
+
+void setDefaultSetPoint() {
+  ct.low = 25.0; ct.high = 30.0;
+  ht.low = 17.0; ht.high = 24.0;
+}
+
+void setNoOneSetPoint() {
+  ct.low = 30.0; ct.high = 40.0;
+  ht.low = 10.0; ht.high = 18.0;
+}
+
+void updateFormatError() {
+  Serial.println("Error in command format");
+  return;
+}
+
+void checkCharAndUpdateVal(char c, TempPair& temp, float value) {
+  Serial.println(value);
+  switch (c) {
+    case 'L':
+      temp.low = value;
+      break;
+    case 'H':
+      temp.high = value;
+      break;
+    default:
+      return updateFormatError();
+  }
+}
+
+/*
+  "HTLxxx" => ht.low
+  "HTHxxx" => ht.high
+  "CTLxxx" => ct.low
+  "CTHxxx" => ct.high
+*/
+void checkAndChangeSetPoint() {
+  if (Serial.available() > 0) {
+    auto command = Serial.readString();
+    if (command.length() < 5) {
+      return updateFormatError();
+    }
+    if (command[3] != ' ')
+      return updateFormatError();
+    float value = command.substring(4).toFloat();
+    if (command.startsWith("HT")) {
+      return checkCharAndUpdateVal(command[2], ht, value);
+    } else if (command.startsWith("CT")) {
+      return checkCharAndUpdateVal(command[2], ct, value);
+    } else {
+      return updateFormatError();
+    }
+  }
+}
+
+void setTempBasedOnPresence(float temp) {
   int pres = 0;
   if (checkPresenceRoom() == true) {
-    ht_high = 25.0; ht_low = 20.0; ct_high = 30.0; ct_low = 25.0;
     Serial.println("There is at least one person is this room");
     pres = 1;
-    checkTempAndChangeSpeed(temp, ht_low, ht_high, ct_low, ct_high, pres);
   }
   else {
+    setNoOneSetPoint();
     pres = 0;
-    checkTempAndChangeSpeed(temp, ht_low, ht_high, ct_low, ct_high, pres);
   }
+  checkTempAndChangeSpeed(temp, pres);
 }
 
 void loop() {
@@ -170,6 +237,6 @@ void loop() {
   float temp = convertTension(sensorVal);
   Serial.print("Temperatura: ");
   Serial.println(temp);
-  checkAndChangeSetPoint(temp);
-  //delay(1e4);
+  checkAndChangeSetPoint();
+  setTempBasedOnPresence(temp);
 }

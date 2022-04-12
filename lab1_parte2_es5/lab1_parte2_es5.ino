@@ -1,3 +1,4 @@
+
 //microphone
 const int MIC_PIN = A0; //vedere se funziona provare 4
 int n_sound_events = 0;

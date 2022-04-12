@@ -22,7 +22,7 @@ void setup() {
   lcd.print("Temperature:");
 }
 
-void convertTension (int sensorVal) {
+void convertTension (float sensorVal) {
   float R = ((Vcc / sensorVal) - 1.0) * R0;
   float T = 1 / (log(R / R0) / B + 1 / T0) - 273.15;
   lcd.setCursor(12, 0);
@@ -31,6 +31,6 @@ void convertTension (int sensorVal) {
 }
 
 void loop() {
-  int sensorVal = analogRead(TEMP_PIN);
+  float sensorVal = analogRead(TEMP_PIN);
   convertTension(sensorVal);
 }

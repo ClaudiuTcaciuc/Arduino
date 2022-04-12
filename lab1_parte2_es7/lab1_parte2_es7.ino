@@ -1,3 +1,5 @@
+#include <LiquidCrystal_PCF8574.h>
+LiquidCrystal_PCF8574 lcd(0x27);
 //microphone
 const int MIC_PIN = A0; //vedere se funziona provare 4
 int n_sound_events = 0;
@@ -13,7 +15,6 @@ const int TEMP_PIN = A1;
 const int PIR_PIN = 7;
 unsigned long elapsed_time = 0;
 const long timeout_pir = 30l * 60l * 1000l;
-
 void setup() {
   pinMode(PIR_PIN, INPUT);
   pinMode(MIC_PIN, INPUT);
@@ -26,6 +27,11 @@ void setup() {
   Serial.begin(9600);
   while (!Serial);
   Serial.println("Lab 2 Starting");
+
+  lcd.begin(16, 2);
+  lcd.setBacklight(255);
+  lcd.home();
+  lcd.clear();
 }
 
 float convertTension(float sensorVal) {
@@ -39,43 +45,79 @@ float convertTension(float sensorVal) {
   return T;
 }
 
-int calcSpeed(float temp) {
-  if (temp <= 38.0) {
-    float dt = (temp - 25.0) * 20.0;
+int calcSpeed(float temp, float ct_high, float ct_low) {
+  if (temp <= ct_high) {
+    float dt = (temp - ct_low) * (255 / (ct_high - ct_low));
     return (int)dt;
   } else {
     return 255;
   }
 }
 
-int calcLedIntensity(float temp) {
-  if (temp >= 20.0) {
-    float dt = (25.0 - temp) * 51.0;
+int calcLedIntensity(float temp, float ht_high, float ht_low) {
+  if (temp >= ht_low) {
+    float dt = (ht_high - temp) * (255 / (ht_high - ht_low));
     return (int)(dt);
   } else {
     return 255;
   }
 }
 
-void checkTempAndChangeSpeed(float temp) {
-  if (temp >= 25.0) {
+void checkTempAndChangeSpeed(float temp, float ht_low,
+                             float ht_high, float ct_low,
+                             float ct_high, int pres) {
+  int newSpeed = 0;
+  int newLedIntensity = 0;
+  if (temp >= ct_low) {
     analogWrite(RLED_PIN, LOW);
-    int newSpeed = calcSpeed(temp);
-    if (newSpeed <= 255 && newSpeed >= 0){
+    newSpeed = calcSpeed(temp, ct_high, ct_low);
+    if (newSpeed <= 255 && newSpeed >= 0) {
       analogWrite(FAN_PIN, newSpeed);
       Serial.print("New fan speed: ");
       Serial.println(newSpeed);
     }
   }
-  else {
+  else if (temp < ht_high) {
     analogWrite(FAN_PIN, 0);
-    int newLedIntensity = calcLedIntensity(temp);
-    if (newLedIntensity <= 255 && newLedIntensity >= 0){
+    newLedIntensity = calcLedIntensity(temp, ht_high, ht_low);
+    if (newLedIntensity <= 255 && newLedIntensity >= 0) {
       analogWrite(RLED_PIN, newLedIntensity);
       Serial.print("New led intensity: ");
       Serial.println(newLedIntensity);
     }
   }
+  else {
+    analogWrite(RLED_PIN, LOW);
+    analogWrite(FAN_PIN, 0);
+  }
+  char buf[250]{"hello world"} ;
+  Serial.println(buf);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("T:");
+  lcd.print(temp);
+  lcd.print(" Pres:");
+  lcd.print(pres);
+  lcd.setCursor(0, 1);
+  lcd.print("AC:");
+  lcd.print(100 * newSpeed / 255);
+  lcd.print(" HT:");
+  lcd.print(100 * newLedIntensity / 255);
+  delay(5e3);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("AC m:");
+  lcd.print(ct_low);
+  lcd.setCursor(9, 0);
+  lcd.print(" M:");
+  lcd.print(ct_high);
+  lcd.setCursor(0, 1);
+  lcd.print("HT m:");
+  lcd.print(ht_low);
+  lcd.setCursor(9, 1);
+  lcd.print(" M:");
+  lcd.print(ht_high);
+  delay(5e3);
 }
 
 void checkPresencePIR() {
@@ -108,14 +150,26 @@ bool checkPresenceRoom() {
   return false;
 }
 
+void checkAndChangeSetPoint(float temp) {
+  float ht_high = 20.0, ht_low = 10.0, ct_high = 40.0, ct_low = 30.0;
+  int pres = 0;
+  if (checkPresenceRoom() == true) {
+    ht_high = 25.0; ht_low = 20.0; ct_high = 30.0; ct_low = 25.0;
+    Serial.println("There is at least one person is this room");
+    pres = 1;
+    checkTempAndChangeSpeed(temp, ht_low, ht_high, ct_low, ct_high, pres);
+  }
+  else {
+    pres = 0;
+    checkTempAndChangeSpeed(temp, ht_low, ht_high, ct_low, ct_high, pres);
+  }
+}
+
 void loop() {
   float sensorVal = analogRead(TEMP_PIN);
   float temp = convertTension(sensorVal);
   Serial.print("Temperatura: ");
   Serial.println(temp);
-  checkTempAndChangeSpeed(temp);
-  if (checkPresenceRoom() == true) {
-    Serial.println("There is at least one person is this room");
-  }
-  delay(1e4);
+  checkAndChangeSetPoint(temp);
+  //delay(1e4);
 }

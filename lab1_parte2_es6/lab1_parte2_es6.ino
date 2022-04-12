@@ -3,9 +3,9 @@ const int MIC_PIN = A0; //vedere se funziona provare 4
 int n_sound_events = 0;
 unsigned long last_event_time = 0;
 const long sound_interval = 10l * 60l * 1000l;
-//fan
+//sensore fan
 const int FAN_PIN = 6;
-//led
+//sensore led
 const int RLED_PIN = 11;
 //sensore di temperatura
 const int TEMP_PIN = A1;
@@ -39,42 +39,46 @@ float convertTension(float sensorVal) {
   return T;
 }
 
-int calcSpeed(float temp) {
-  if (temp <= 38.0) {
-    float dt = (temp - 25.0) * 20.0;
+int calcSpeed(float temp, float ct_high, float ct_low) {
+  if (temp <= ct_high) {
+    float dt = (temp - ct_low) * (255 / (ct_high - ct_low));
     return (int)dt;
   } else {
     return 255;
   }
 }
 
-int calcLedIntensity(float temp) {
-  if (temp >= 20.0) {
-    float dt = (25.0 - temp) * 51.0;
+int calcLedIntensity(float temp, float ht_high, float ht_low) {
+  if (temp >= ht_low) {
+    float dt = (ht_high - temp) * (255 / (ht_high - ht_low));
     return (int)(dt);
   } else {
     return 255;
   }
 }
 
-void checkTempAndChangeSpeed(float temp) {
-  if (temp >= 25.0) {
+void checkTempAndChangeSpeed(float temp, float ht_low, float ht_high, float ct_low, float ct_high) {
+  if (temp >= ct_low) {
     analogWrite(RLED_PIN, LOW);
-    int newSpeed = calcSpeed(temp);
-    if (newSpeed <= 255 && newSpeed >= 0){
+    int newSpeed = calcSpeed(temp, ct_high, ct_low);
+    if (newSpeed <= 255 && newSpeed >= 0) {
       analogWrite(FAN_PIN, newSpeed);
       Serial.print("New fan speed: ");
       Serial.println(newSpeed);
     }
   }
-  else {
+  else if (temp < ht_high) {
     analogWrite(FAN_PIN, 0);
-    int newLedIntensity = calcLedIntensity(temp);
-    if (newLedIntensity <= 255 && newLedIntensity >= 0){
+    int newLedIntensity = calcLedIntensity(temp, ht_high, ht_low);
+    if (newLedIntensity <= 255 && newLedIntensity >= 0) {
       analogWrite(RLED_PIN, newLedIntensity);
       Serial.print("New led intensity: ");
       Serial.println(newLedIntensity);
     }
+  }
+  else {
+    analogWrite(RLED_PIN, LOW);
+    analogWrite(FAN_PIN, 0);
   }
 }
 
@@ -108,14 +112,21 @@ bool checkPresenceRoom() {
   return false;
 }
 
+void checkAndChangeSetPoint(float temp) {
+  float ht_high = 20, ht_low = 10, ct_high = 40, ct_low = 30;
+  if (checkPresenceRoom() == true) {
+    ht_high = 25.0; ht_low = 20.0; ct_high = 30.0; ct_low = 25.0;
+    Serial.println("There is at least one person is this room");
+    checkTempAndChangeSpeed(temp, ht_low, ht_high, ct_low, ct_high);
+  }
+  checkTempAndChangeSpeed(temp, ht_low, ht_high, ct_low, ct_high);
+}
+
 void loop() {
   float sensorVal = analogRead(TEMP_PIN);
   float temp = convertTension(sensorVal);
   Serial.print("Temperatura: ");
   Serial.println(temp);
-  checkTempAndChangeSpeed(temp);
-  if (checkPresenceRoom() == true) {
-    Serial.println("There is at least one person is this room");
-  }
+  checkAndChangeSetPoint(temp);
   delay(1e4);
 }

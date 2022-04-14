@@ -166,6 +166,7 @@ float readSetPoint() {
 }
 
 void setDefaultSetPoint() {
+  flag_changed = 0;
   ct.low = 25.0; ct.high = 30.0;
   ht.low = 17.0; ht.high = 24.0;
 }
@@ -176,16 +177,20 @@ void setNoOneSetPoint() {
 }
 
 void updateFormatError() {
-  Serial.println("Error in command format or value not acceptable");
+  Serial.println("Error in command format or value is not acceptable");
   return;
 }
 
 void checkCharAndUpdateVal(char c, TempPair & temp, float value) {
   switch (c) {
     case 'L':
+      if (value > temp.high)
+        return updateFormatError();
       temp.low = value;
       break;
     case 'H':
+      if (value < temp.low)
+        return updateFormatError();
       temp.high = value;
       break;
     default:
@@ -210,9 +215,13 @@ void checkAndChangeSetPoint() {
       return updateFormatError();
     float value = command.substring(4).toFloat();
     if (command.startsWith("HT")) {
+      if (value > ct.low)
+        return updateFormatError();
       flag_changed = 1;
       return checkCharAndUpdateVal(command[2], ht, value);
     } else if (command.startsWith("CT")) {
+      if (value < ht.high)
+        return updateFormatError();
       flag_changed = 1;
       return checkCharAndUpdateVal(command[2], ct, value);
     } else {
@@ -224,7 +233,6 @@ void checkAndChangeSetPoint() {
 void setTempBasedOnPresence(float temp, unsigned long time_point) {
   int pres = 0;
   if (checkPresenceRoom(time_point) == true) {
-    //Serial.println("There is at least one person is this room");
     pres = 1;
   }
   else

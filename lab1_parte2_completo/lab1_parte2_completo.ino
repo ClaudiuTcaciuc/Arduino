@@ -24,8 +24,19 @@ struct TempPair {
   float low;
   float high;
 };
-TempPair ct{.low = 25.0, .high = 30.0};
-TempPair ht{.low = 17.0, .high = 24.0};
+
+TempPair ct_noOne{.low = 30.0, .high = 40.0};
+TempPair ht_noOne{.low = 10.0, .high = 15.0};
+
+TempPair ct_default{.low = 25.0, .high = 30.0};
+TempPair ht_default{.low = 17.0, .high = 24.0};
+
+TempPair ct_changed{.low = 25.0, .high = 30.0};
+TempPair ht_changed{.low = 17.0, .high = 24.0};
+
+TempPair ct{.low = ct_default.low, .high = ct_default.high};
+TempPair ht{.low = ht_default.low, .high = ht_default.high};
+
 
 void setup() {
   pinMode(PIR_PIN, INPUT);
@@ -81,10 +92,11 @@ void checkTempAndChangeSpeed(float temp, int pres, unsigned long time_point) {
   int newLedIntensity = 0;
   if (pres == 0)
     setNoOneSetPoint();
-  else {
-    if (flag_changed == 0)
-      setDefaultSetPoint();
-  }
+  else if (flag_changed == 0)
+    setDefaultSetPoint();
+  else
+    setChangedSetPoint();
+
   if (temp >= ct.low) {
     analogWrite(RLED_PIN, LOW);
     newSpeed = calcSpeed(temp);
@@ -124,7 +136,6 @@ void checkTempAndChangeSpeed(float temp, int pres, unsigned long time_point) {
     lcd.print(bufPage2);
     previous_time_display2 += display2_period;
   }
-
 }
 
 void checkPresencePIR() {
@@ -166,15 +177,20 @@ float readSetPoint() {
 }
 
 void setDefaultSetPoint() {
-  flag_changed = 0;
-  ct.low = 25.0; ct.high = 30.0;
-  ht.low = 17.0; ht.high = 24.0;
+  ct.low = ct_default.low; ct.high = ct_default.high;
+  ht.low = ht_default.low; ht.high = ht_default.high;
 }
 
 void setNoOneSetPoint() {
-  ct.low = 30.0; ct.high = 40.0;
-  ht.low = 10.0; ht.high = 18.0;
+  ct.low = ct_noOne.low; ct.high = ct_noOne.high;
+  ht.low = ht_noOne.low; ht.high = ht_noOne.high;
 }
+
+void setChangedSetPoint() {
+  ct.low = ct_changed.low; ct.high = ct_changed.high;
+  ht.low = ht_changed.low; ht.high = ht_changed.high;
+}
+
 
 void updateFormatError() {
   Serial.println("Error in command format or value is not acceptable");
@@ -199,10 +215,10 @@ void checkCharAndUpdateVal(char c, TempPair & temp, float value) {
 }
 
 /*
-  "HTLxxx" => ht.low
-  "HTHxxx" => ht.high
-  "CTLxxx" => ct.low
-  "CTHxxx" => ct.high
+  "HTL xx" => ht.low
+  "HTH xx" => ht.high
+  "CTL xx" => ct.low
+  "CTH xx" => ct.high
 */
 
 void checkAndChangeSetPoint() {
@@ -215,15 +231,15 @@ void checkAndChangeSetPoint() {
       return updateFormatError();
     float value = command.substring(4).toFloat();
     if (command.startsWith("HT")) {
-      if (value > ct.low)
+      if (value > ct_changed.low)
         return updateFormatError();
       flag_changed = 1;
-      return checkCharAndUpdateVal(command[2], ht, value);
+      return checkCharAndUpdateVal(command[2], ht_changed, value);
     } else if (command.startsWith("CT")) {
-      if (value < ht.high)
+      if (value < ht_changed.high)
         return updateFormatError();
       flag_changed = 1;
-      return checkCharAndUpdateVal(command[2], ct, value);
+      return checkCharAndUpdateVal(command[2], ct_changed, value);
     } else {
       return updateFormatError();
     }

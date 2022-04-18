@@ -1,7 +1,7 @@
 #include <LiquidCrystal_PCF8574.h>
 LiquidCrystal_PCF8574 lcd(0x27);
 //microphone
-const int MIC_PIN = A0; //vedere se funziona provare A0
+const int MIC_PIN = A0;
 int n_sound_events = 0;
 unsigned long last_event_time = 0;
 const long sound_interval = 10l * 60l * 1000l;
@@ -9,6 +9,7 @@ const long sound_interval = 10l * 60l * 1000l;
 const int FAN_PIN = 6;
 //led
 const int RLED_PIN = 11;
+const int GLED_PIN = 10;
 //sensore di temperatura
 const int TEMP_PIN = A1;
 //sensore di movimento
@@ -20,6 +21,7 @@ const int display2_period = 10000;
 unsigned long previous_time_display1 = 0;
 unsigned long previous_time_display2 = 0;
 int flag_changed = 0;
+int clap = 0;
 struct TempPair {
   float low;
   float high;
@@ -31,12 +33,11 @@ TempPair ht_noOne{.low = 10.0, .high = 15.0};
 TempPair ct_default{.low = 25.0, .high = 30.0};
 TempPair ht_default{.low = 17.0, .high = 24.0};
 
-TempPair ct_changed{.low = 25.0, .high = 30.0};
-TempPair ht_changed{.low = 17.0, .high = 24.0};
+TempPair ct_changed = ct_default;
+TempPair ht_changed = ht_default;
 
-TempPair ct{.low = ct_default.low, .high = ct_default.high};
-TempPair ht{.low = ht_default.low, .high = ht_default.high};
-
+TempPair ct = ct_default;
+TempPair ht = ht_default;
 
 void setup() {
   pinMode(PIR_PIN, INPUT);
@@ -44,6 +45,7 @@ void setup() {
   pinMode(TEMP_PIN, INPUT);
   pinMode(FAN_PIN, OUTPUT);
   pinMode(RLED_PIN, OUTPUT);
+  pinMode(GLED_PIN, OUTPUT);
 
   analogWrite(FAN_PIN, 0);
   attachInterrupt(digitalPinToInterrupt(PIR_PIN), checkPresencePIR, CHANGE);
@@ -73,24 +75,37 @@ int calcSpeed(float temp) {
   if (temp <= ct.high) {
     float dt = (temp - ct.low) * (255 / (ct.high - ct.low));
     return (int)dt;
-  } else {
+  } else
     return 255;
-  }
 }
 
 int calcLedIntensity(float temp) {
   if (temp >= ht.low) {
     float dt = (ht.high - temp) * (255 / (ht.high - ht.low));
     return (int)(dt);
-  } else {
+  } else
     return 255;
-  }
 }
 
-void checkTempAndChangeSpeed(float temp, int pres, unsigned long time_point) {
+void setDefaultSetPoint() {
+  ct = ct_default;
+  ht = ht_default;
+}
+
+void setNoOneSetPoint() {
+  ct = ct_noOne;
+  ht = ht_noOne;
+}
+
+void setChangedSetPoint() {
+  ct = ct_changed;
+  ht = ht_changed;
+}
+
+void checkTempAndChangeSpeed(float temp, bool pres, unsigned long time_point) {
   int newSpeed = 0;
   int newLedIntensity = 0;
-  if (pres == 0)
+  if (!pres)
     setNoOneSetPoint();
   else if (flag_changed == 0)
     setDefaultSetPoint();
@@ -100,16 +115,14 @@ void checkTempAndChangeSpeed(float temp, int pres, unsigned long time_point) {
   if (temp >= ct.low) {
     analogWrite(RLED_PIN, LOW);
     newSpeed = calcSpeed(temp);
-    if (newSpeed <= 255 && newSpeed >= 0) {
+    if (newSpeed <= 255 && newSpeed >= 0)
       analogWrite(FAN_PIN, newSpeed);
-    }
   }
   else if (temp < ht.high) {
     analogWrite(FAN_PIN, 0);
     newLedIntensity = calcLedIntensity(temp);
-    if (newLedIntensity <= 255 && newLedIntensity >= 0) {
+    if (newLedIntensity <= 255 && newLedIntensity >= 0)
       analogWrite(RLED_PIN, newLedIntensity);
-    }
   }
   else {
     analogWrite(RLED_PIN, LOW);
@@ -129,7 +142,7 @@ void checkTempAndChangeSpeed(float temp, int pres, unsigned long time_point) {
   if (time_point >= previous_time_display2 + display2_period) {
     lcd.clear();
     lcd.setCursor(0, 0);
-    bufPage1 = String("T:") + String(temp) + " Pres:" + pres;
+    bufPage1 = String("T:") + String(temp) + " Pres:" + (pres ? "si" : "no");
     bufPage2 = String("AC:") + String(100 * newSpeed / 255) + "% HT:" + String(100 * newLedIntensity / 255) + "%";
     lcd.print(bufPage1);
     lcd.setCursor(0, 1);
@@ -139,34 +152,34 @@ void checkTempAndChangeSpeed(float temp, int pres, unsigned long time_point) {
 }
 
 void checkPresencePIR() {
-  if ( digitalRead(PIR_PIN) == HIGH ) {
+  if ( digitalRead(PIR_PIN) == HIGH )
     elapsed_time = millis();
-    //Serial.println("PIR detected a movement");
-  }
 }
 
-void checkPresenceMIC(unsigned long time_point) {
-  if (digitalRead(MIC_PIN) == LOW) {
-    if (time_point - last_event_time > 1000) {
+/* Richiesta 4
+  void checkPresenceMIC(unsigned long time_point) {
+  if (digitalRead(MIC_PIN) == LOW)
+    if (time_point - last_event_time > 25) {
       n_sound_events++;
       last_event_time = time_point;
-      //Serial.println("MIC detected sound");
     }
   }
-}
+*/
 bool checkPresenceRoom(unsigned long time_point) {
   bool check_mic = true, check_pir = true;
-  checkPresenceMIC(time_point);
-  if (n_sound_events <= 50 && last_event_time + sound_interval <= time_point) {
+  /*Richiesta 4
+    checkPresenceMIC(time_point);
+    if (n_sound_events <= 50 && last_event_time + sound_interval <= time_point) {
     Serial.println("No detection for over 10 mins with sound sensor");
     n_sound_events = 0;
     check_mic = false;
-  }
+    }
+  */
   if (elapsed_time + timeout_pir <= time_point) {
     Serial.println("No detection for over 30 mins with pir sensor");
     check_pir = false;
   }
-  if (check_mic == true || check_pir == true)
+  if (check_mic || check_pir)
     return true;
   return false;
 }
@@ -175,22 +188,6 @@ float readSetPoint() {
   while (Serial.available() == 0) {};
   return Serial.parseFloat();
 }
-
-void setDefaultSetPoint() {
-  ct.low = ct_default.low; ct.high = ct_default.high;
-  ht.low = ht_default.low; ht.high = ht_default.high;
-}
-
-void setNoOneSetPoint() {
-  ct.low = ct_noOne.low; ct.high = ct_noOne.high;
-  ht.low = ht_noOne.low; ht.high = ht_noOne.high;
-}
-
-void setChangedSetPoint() {
-  ct.low = ct_changed.low; ct.high = ct_changed.high;
-  ht.low = ht_changed.low; ht.high = ht_changed.high;
-}
-
 
 void updateFormatError() {
   Serial.println("Error in command format or value is not acceptable");
@@ -240,20 +237,36 @@ void checkAndChangeSetPoint() {
         return updateFormatError();
       flag_changed = 1;
       return checkCharAndUpdateVal(command[2], ct_changed, value);
-    } else {
+    } else
       return updateFormatError();
-    }
   }
 }
 
 void setTempBasedOnPresence(float temp, unsigned long time_point) {
-  int pres = 0;
-  if (checkPresenceRoom(time_point) == true) {
-    pres = 1;
+  checkTempAndChangeSpeed(temp, checkPresenceRoom(time_point), time_point);
+}
+
+//richiesta 9
+void turnOnOffLight(int stat_light) {
+  digitalWrite(GLED_PIN, stat_light);
+  clap = 0;
+}
+
+void checkSoundLightActivation(unsigned long time_point) {
+  if (digitalRead(MIC_PIN) == LOW ) {
+    if (time_point - last_event_time < 500 && clap > 0) 
+      clap++;
+    else if (clap == 0) {
+      last_event_time = time_point;
+      clap++;
+    }
+    else
+      clap = 0;
+    if (digitalRead(GLED_PIN) == LOW && clap >= 2)
+      turnOnOffLight(HIGH);
+    else if (digitalRead(GLED_PIN) == HIGH && clap >= 2)
+      turnOnOffLight(LOW);
   }
-  else
-    pres = 0;
-  checkTempAndChangeSpeed(temp, pres, time_point);
 }
 
 void loop() {
@@ -262,5 +275,6 @@ void loop() {
   float sensorVal = analogRead(TEMP_PIN);
   float temp = convertTension(sensorVal);
   setTempBasedOnPresence(temp, time_point);
-  delay(1e3);
+  checkSoundLightActivation(time_point);
+  delay(1e1);
 }
